@@ -1,0 +1,31 @@
+# Python Caches and Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+ActiveState.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Streamlit Caching & Configuration
+.streamlit/
+*.log
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# IDE & Editor Artifacts
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
