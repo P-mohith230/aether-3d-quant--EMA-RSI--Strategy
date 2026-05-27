@@ -2,90 +2,98 @@ import streamlit as st
 import plotly.graph_objects as go
 from quant_engine import fetch_historical_data, apply_strategy, run_backtest
 
-st.set_page_config(layout="wide", page_title="3D Quant Dashboard")
+st.set_page_config(layout="wide", page_title="Aether Quant Dashboard")
 
-st.title("🚀 3D Quant Trading Dashboard")
-st.markdown("Beginner-friendly visualization of EMA + RSI Strategy on BTCUSDT.")
+# Cache-busting version key — bump on every code change
+CACHE_VERSION = "v5_2026_05_27"
 
-# Fetch and Process Data
-@st.cache_data
-def load_telemetry_data():
+@st.cache_data(ttl=3600)
+def load_strategy_data(_version):
     df = fetch_historical_data(symbol="BTCUSDT", interval="1d", limit=365)
     df = apply_strategy(df)
     df, metrics = run_backtest(df)
     return df, metrics
 
-df, metrics = load_telemetry_data()
+try:
+    df, metrics = load_strategy_data(CACHE_VERSION)
+except Exception:
+    st.cache_data.clear()
+    df, metrics = load_strategy_data(CACHE_VERSION)
+
+# Auto-retry if stale cache returned 0 trades
+if metrics["num_trades"] == 0:
+    st.cache_data.clear()
+    df, metrics = load_strategy_data(CACHE_VERSION)
+
 profit = metrics["total_profit"]
+
+st.title("🚀 Aether Quant Trading Dashboard")
+st.markdown("EMA 9/21 + RSI Pullback Strategy on BTCUSDT")
 
 # --- TOP METRICS ---
 col1, col2, col3 = st.columns(3)
-col1.metric("Total Backtest Profit", f"${profit:.2f}")
-col2.metric("Final Equity", f"${df['equity'].iloc[-1]:.2f}", f"{(profit/10000)*100:.2f}%")
-col3.metric("Current BTC Price", f"${df['close'].iloc[-1]:.2f}")
+col1.metric("🔄 Number of Trades", f"{metrics['num_trades']}")
+col2.metric("🎯 Win Rate", f"{metrics['win_rate']:.1f}%")
+col3.metric("💰 Total Profit", f"${profit:,.2f}", f"{(profit/10000)*100:.2f}% ROI")
 
 st.divider()
 
-# --- 3D VISUALIZATION (Plotly) ---
-st.subheader("Interactive 3D Strategy View")
-st.markdown("X-axis: Time | Y-axis: Price | Z-axis: RSI (Colors indicate overbought/oversold)")
+# --- PRICE CHART WITH SIGNALS ---
+st.subheader("📈 Price Chart with Buy/Sell Signals")
 
 fig = go.Figure()
 
-# Add 3D line for Price vs Time vs RSI
-fig.add_trace(go.Scatter3d(
-    x=df['timestamp'],
-    y=df['close'],
-    z=df['RSI'],
-    mode='lines+markers',
-    marker=dict(
-        size=3,
-        color=df['RSI'],
-        colorscale='RdYlGn_r', # Red for Overbought(>70), Green for Oversold(<30)
-        showscale=True,
-        colorbar=dict(title="RSI")
-    ),
-    line=dict(color='white', width=2),
-    name='BTC Price Path'
+fig.add_trace(go.Candlestick(
+    x=df['timestamp'], open=df['open'], high=df['high'],
+    low=df['low'], close=df['close'], name='BTC Price',
+    increasing_line_color='#00C853', decreasing_line_color='#FF1744'
 ))
 
-# Highlight Buy Signals in 3D
-buy_signals = df[df['signal'] == 1]
-fig.add_trace(go.Scatter3d(
-    x=buy_signals['timestamp'],
-    y=buy_signals['close'],
-    z=buy_signals['RSI'],
-    mode='markers',
-    marker=dict(size=8, color='green', symbol='circle'),
-    name='Buy Signal'
+fig.add_trace(go.Scatter(
+    x=df['timestamp'], y=df['EMA_9'],
+    mode='lines', name='EMA 9', line=dict(color='yellow', width=2)
 ))
 
-# Highlight Sell Signals in 3D
-sell_signals = df[df['signal'] == -1]
-fig.add_trace(go.Scatter3d(
-    x=sell_signals['timestamp'],
-    y=sell_signals['close'],
-    z=sell_signals['RSI'],
-    mode='markers',
-    marker=dict(size=8, color='red', symbol='x'),
-    name='Sell Signal'
+fig.add_trace(go.Scatter(
+    x=df['timestamp'], y=df['EMA_21'],
+    mode='lines', name='EMA 21', line=dict(color='orange', width=2)
+))
+
+buy_df = df[df['signal'] == 1]
+fig.add_trace(go.Scatter(
+    x=buy_df['timestamp'], y=buy_df['close'],
+    mode='markers', name='BUY',
+    marker=dict(symbol='triangle-up', size=12, color='#00E676',
+                line=dict(color='white', width=1))
+))
+
+sell_df = df[df['signal'] == -1]
+fig.add_trace(go.Scatter(
+    x=sell_df['timestamp'], y=sell_df['close'],
+    mode='markers', name='SELL',
+    marker=dict(symbol='triangle-down', size=12, color='#FF1744',
+                line=dict(color='white', width=1))
 ))
 
 fig.update_layout(
-    scene=dict(
-        xaxis_title='Time',
-        yaxis_title='Price (USDT)',
-        zaxis_title='RSI',
-        bgcolor='black'
-    ),
-    height=700,
-    margin=dict(r=20, l=10, b=10, t=10)
+    height=600, template="plotly_dark",
+    xaxis_rangeslider_visible=False,
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
 )
 
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width='stretch')
 
-# --- 2D EQUITY CURVE ---
-st.subheader("2D Equity Curve (Account Balance over Time)")
+# --- EQUITY CURVE ---
+st.subheader("💰 Equity Curve (Account Balance over Time)")
 equity_fig = go.Figure()
-equity_fig.add_trace(go.Scatter(x=df['timestamp'], y=df['equity'], mode='lines', name='Equity', line=dict(color='cyan')))
-st.plotly_chart(equity_fig, use_container_width=True)
+equity_fig.add_trace(go.Scatter(
+    x=df['timestamp'], y=df['equity'], mode='lines', name='Equity',
+    line=dict(color='cyan', width=2), fill='tozeroy', fillcolor='rgba(0,255,255,0.1)'
+))
+equity_fig.add_hline(y=10000, line_dash="dash", line_color="#888",
+                     annotation_text="Starting Capital ($10,000)")
+equity_fig.update_layout(height=400, template="plotly_dark",
+                         yaxis_title="Account Value ($)", xaxis_title="Date")
+st.plotly_chart(equity_fig, width='stretch')
+
+st.caption("For educational & research purposes only • Not financial advice")
