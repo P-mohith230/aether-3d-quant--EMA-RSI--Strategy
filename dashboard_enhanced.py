@@ -41,7 +41,7 @@ Each visualization helps you understand different aspects of trading!
 # LOAD DATA
 # =============================================================================
 @st.cache_data
-def load_data():
+def load_telemetry_data():
     """Fetch BTC data and apply our EMA + RSI strategy"""
     df = fetch_historical_data(symbol="BTCUSDT", interval="1d", limit=365)
     df = apply_strategy(df)
@@ -50,7 +50,7 @@ def load_data():
     df['day_index'] = range(len(df))
     return df, metrics
 
-df, metrics = load_data()
+df, metrics = load_telemetry_data()
 profit = metrics["total_profit"]
 
 # =============================================================================

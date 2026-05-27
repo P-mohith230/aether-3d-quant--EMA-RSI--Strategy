@@ -9,13 +9,13 @@ st.markdown("Beginner-friendly visualization of EMA + RSI Strategy on BTCUSDT.")
 
 # Fetch and Process Data
 @st.cache_data
-def load_data():
+def load_telemetry_data():
     df = fetch_historical_data(symbol="BTCUSDT", interval="1d", limit=365)
     df = apply_strategy(df)
     df, metrics = run_backtest(df)
     return df, metrics
 
-df, metrics = load_data()
+df, metrics = load_telemetry_data()
 profit = metrics["total_profit"]
 
 # --- TOP METRICS ---
