@@ -103,10 +103,10 @@ def apply_strategy(df):
     df["signal"] = 0
     df["position"] = 0
     
-    # Buy: EMA 9 > EMA 21 and RSI < 30 (Oversold but trending up)
-    buy_condition = (df["EMA_9"] > df["EMA_21"]) & (df["RSI"] < 30)
-    # Sell: EMA 9 < EMA 21 and RSI > 70 (Overbought and trending down)
-    sell_condition = (df["EMA_9"] < df["EMA_21"]) & (df["RSI"] > 70)
+    # Optimized Buy: EMA 9 > EMA 21 and RSI < 55 (Uptrend pullback, not yet overbought)
+    buy_condition = (df["EMA_9"] > df["EMA_21"]) & (df["RSI"] < 55)
+    # Optimized Sell: EMA 9 < EMA 21 or RSI > 70 (Trend ends or extreme overbought achieved)
+    sell_condition = (df["EMA_9"] < df["EMA_21"]) | (df["RSI"] > 70)
     
     df.loc[buy_condition, "signal"] = 1
     df.loc[sell_condition, "signal"] = -1
