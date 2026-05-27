@@ -45,12 +45,13 @@ def load_data():
     """Fetch BTC data and apply our EMA + RSI strategy"""
     df = fetch_historical_data(symbol="BTCUSDT", interval="1d", limit=365)
     df = apply_strategy(df)
-    df, profit = run_backtest(df)
+    df, metrics = run_backtest(df)
     # Add a numeric index for 3D plotting
     df['day_index'] = range(len(df))
-    return df, profit
+    return df, metrics
 
-df, profit = load_data()
+df, metrics = load_data()
+profit = metrics["total_profit"]
 
 # =============================================================================
 # TOP METRICS - Key Numbers at a Glance
@@ -58,6 +59,7 @@ df, profit = load_data()
 st.markdown("---")
 st.subheader("📊 Key Performance Metrics")
 
+# First Row of Metrics
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
@@ -73,25 +75,53 @@ with col2:
         label="📈 Final Account Balance",
         value=f"${df['equity'].iloc[-1]:,.2f}"
     )
-    st.caption("Total money at the end")
+    st.caption("Total portfolio capital at closure")
 
 with col3:
     st.metric(
-        label="₿ Current BTC Price",
-        value=f"${df['close'].iloc[-1]:,.2f}"
+        label="🎯 Strategy Win Rate",
+        value=f"{metrics['win_rate']:.1f}%"
     )
-    st.caption("Latest Bitcoin price")
+    st.caption("Percentage of profitable trades")
 
 with col4:
-    # Count signals
-    buy_count = len(df[df['signal'] == 1])
-    sell_count = len(df[df['signal'] == -1])
     st.metric(
-        label="🔔 Total Signals",
-        value=f"{buy_count + sell_count}",
-        delta=f"Buy: {buy_count} | Sell: {sell_count}"
+        label="⚖️ Profit Factor",
+        value=f"{metrics['profit_factor']:.2f}"
     )
-    st.caption("Trading signals generated")
+    st.caption("Gross Profits divided by Gross Losses")
+
+# Second Row of Metrics
+st.write("") # Add spacing
+col5, col6, col7, col8 = st.columns(4)
+
+with col5:
+    st.metric(
+        label="📉 Maximum Drawdown (Max DD)",
+        value=f"{metrics['max_drawdown']:.2f}%"
+    )
+    st.caption("Peak-to-trough drop from equity curve")
+
+with col6:
+    st.metric(
+        label="📊 Sharpe Ratio",
+        value=f"{metrics['sharpe_ratio']:.2f}"
+    )
+    st.caption("Risk-adjusted volatility return")
+
+with col7:
+    st.metric(
+        label="🔄 Reward-to-Risk Ratio",
+        value=f"{metrics['avg_win_loss_ratio']:.2f}:1"
+    )
+    st.caption("Average Win-to-Loss ratio per trade")
+
+with col8:
+    st.metric(
+        label="🔔 Executed Trades",
+        value=f"{metrics['num_trades']}"
+    )
+    st.caption("Total completed trading lifecycle runs")
 
 st.markdown("---")
 

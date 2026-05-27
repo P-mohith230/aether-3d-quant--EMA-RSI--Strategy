@@ -95,17 +95,25 @@ def run_backtest(df):
     take_profit_pct = 0.05
     entry_price = 0
     
+    trades_history = []
+    
     for index, row in df.iterrows():
         price = row["close"]
         
         # Check Stop-Loss / Take-Profit
         if position > 0:
             if price <= entry_price * (1 - stop_loss_pct): # Stop Loss
-                balance = position * price
+                exit_price = entry_price * (1 - stop_loss_pct)
+                pnl = (exit_price - entry_price) * position
+                trades_history.append({"pnl": pnl, "win": pnl > 0})
+                balance = position * exit_price
                 position = 0
                 entry_price = 0
             elif price >= entry_price * (1 + take_profit_pct): # Take Profit
-                balance = position * price
+                exit_price = entry_price * (1 + take_profit_pct)
+                pnl = (exit_price - entry_price) * position
+                trades_history.append({"pnl": pnl, "win": pnl > 0})
+                balance = position * exit_price
                 position = 0
                 entry_price = 0
                 
@@ -115,6 +123,8 @@ def run_backtest(df):
             balance = 0
             entry_price = price
         elif row["signal"] == -1 and position > 0:
+            pnl = (price - entry_price) * position
+            trades_history.append({"pnl": pnl, "win": pnl > 0})
             balance = position * price
             position = 0
             entry_price = 0
@@ -122,13 +132,66 @@ def run_backtest(df):
         current_equity = balance + (position * price)
         equity_curve.append(current_equity)
         
+    # Liquidate open position at the very end to ensure perfect metric closure
+    if position > 0:
+        final_price = df["close"].iloc[-1]
+        pnl = (final_price - entry_price) * position
+        trades_history.append({"pnl": pnl, "win": pnl > 0})
+        balance = position * final_price
+        position = 0
+        current_equity = balance
+        equity_curve[-1] = current_equity
+
     df["equity"] = equity_curve
-    profit = df["equity"].iloc[-1] - initial_balance
+    total_profit = df["equity"].iloc[-1] - initial_balance
     
-    return df, profit
+    # Calculate premium backtesting metrics
+    num_trades = len(trades_history)
+    win_rate = (sum(1 for t in trades_history if t["win"]) / num_trades * 100) if num_trades > 0 else 0.0
+    
+    gross_profit = sum(t["pnl"] for t in trades_history if t["pnl"] > 0)
+    gross_loss = abs(sum(t["pnl"] for t in trades_history if t["pnl"] < 0))
+    profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else (gross_profit if gross_profit > 0 else 1.0)
+    
+    winning_trades = [t["pnl"] for t in trades_history if t["pnl"] > 0]
+    losing_trades = [abs(t["pnl"]) for t in trades_history if t["pnl"] < 0]
+    avg_win = np.mean(winning_trades) if len(winning_trades) > 0 else 0.0
+    avg_loss = np.mean(losing_trades) if len(losing_trades) > 0 else 0.0
+    avg_win_loss_ratio = (avg_win / avg_loss) if avg_loss > 0 else 0.0
+    
+    # Maximum Drawdown (Max DD)
+    equity_series = pd.Series(equity_curve)
+    running_max = equity_series.cummax()
+    drawdowns = (equity_series - running_max) / running_max
+    max_drawdown = drawdowns.min() * 100  # returns as negative percentage, e.g. -12.4%
+    
+    # Annualized Sharpe Ratio (assuming daily returns)
+    daily_returns = equity_series.pct_change().dropna()
+    if len(daily_returns) > 0 and daily_returns.std() > 0:
+        sharpe_ratio = (daily_returns.mean() / daily_returns.std()) * np.sqrt(365)
+    else:
+        sharpe_ratio = 0.0
+
+    metrics = {
+        "total_profit": total_profit,
+        "num_trades": num_trades,
+        "win_rate": win_rate,
+        "profit_factor": profit_factor,
+        "max_drawdown": max_drawdown,
+        "avg_win_loss_ratio": avg_win_loss_ratio,
+        "sharpe_ratio": sharpe_ratio
+    }
+    
+    return df, metrics
 
 if __name__ == "__main__":
     df = fetch_historical_data()
     df = apply_strategy(df)
-    df, profit = run_backtest(df)
-    print(f"Backtest complete. Total Profit: ${profit:.2f}")
+    df, metrics = run_backtest(df)
+    print(f"Backtest complete. Total Profit: ${metrics['total_profit']:.2f}")
+    print(f"Number of Trades: {metrics['num_trades']}")
+    print(f"Win Rate: {metrics['win_rate']:.2f}%")
+    print(f"Profit Factor: {metrics['profit_factor']:.2f}")
+    print(f"Max Drawdown: {metrics['max_drawdown']:.2f}%")
+    print(f"Sharpe Ratio: {metrics['sharpe_ratio']:.2f}")
+

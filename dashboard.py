@@ -12,10 +12,11 @@ st.markdown("Beginner-friendly visualization of EMA + RSI Strategy on BTCUSDT.")
 def load_data():
     df = fetch_historical_data(symbol="BTCUSDT", interval="1d", limit=365)
     df = apply_strategy(df)
-    df, profit = run_backtest(df)
-    return df, profit
+    df, metrics = run_backtest(df)
+    return df, metrics
 
-df, profit = load_data()
+df, metrics = load_data()
+profit = metrics["total_profit"]
 
 # --- TOP METRICS ---
 col1, col2, col3 = st.columns(3)
