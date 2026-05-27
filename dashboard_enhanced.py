@@ -2,12 +2,12 @@
 =============================================================================
 🚀 AETHER QUANT — EMA/RSI Strategy Dashboard
 =============================================================================
-Minimalist, mobile-friendly dashboard focused on key metrics:
-  • Number of Trades
-  • Win Rate
-  • Profit
-
-With 2D interactive charts for analysis.
+Full-featured quantitative trading dashboard with:
+  • Key Metrics: Number of Trades, Win Rate, Profit
+  • 2D Charts: Candlestick, Equity Curve, RSI, Volume
+  • 3D Research Visualizations: Price-RSI Path, Terrain, Candlestick
+    Towers, Volume Bars, Signal Overview
+  • Strategy Architecture & Learning Guides
 
 Run: streamlit run dashboard_enhanced.py
 =============================================================================
@@ -268,36 +268,522 @@ vol_fig.update_layout(
 st.plotly_chart(vol_fig, width='stretch')
 
 # =============================================================================
-# STRATEGY EXPLANATION (collapsible)
+# 🌐 3D RESEARCH VISUALIZATIONS
 # =============================================================================
 st.markdown("---")
-with st.expander("📚 How This Strategy Works", expanded=False):
+st.subheader("🌐 3D Research Visualizations")
+st.markdown("""
+Explore the strategy from multiple 3D perspectives. These interactive views reveal patterns
+that are invisible in flat 2D charts. **Click and drag to rotate, scroll to zoom!**
+""")
+
+viz_option = st.selectbox(
+    "Select a 3D visualization:",
+    [
+        "1️⃣ 3D Price Journey (Time × Price × RSI)",
+        "2️⃣ 3D Mountain Terrain (Price Surface)",
+        "3️⃣ 3D Candlestick Towers",
+        "4️⃣ 3D Volume Activity Bars",
+        "5️⃣ 3D Signal Overview (All-in-One)"
+    ],
+    index=0
+)
+
+# ---------------------------------------------------------------------------
+# VIZ 1: 3D PRICE JOURNEY PATH
+# ---------------------------------------------------------------------------
+if viz_option.startswith("1"):
     st.markdown("""
-    ### EMA 9/21 Crossover + RSI Pullback Strategy
+    **What you see:** The white line traces BTC's price through three dimensions —
+    time (X), price (Y), and RSI momentum (Z). Green dots = BUY, Red X = SELL.
+    Colors shift from green (oversold) to red (overbought).
+    """)
 
-    **Entry (Buy) Conditions:**
-    - EMA 9 > EMA 21 (uptrend confirmed)
-    - RSI < 55 (not overbought — pullback entry)
+    fig3d = go.Figure()
 
-    **Exit (Sell) Conditions:**
-    - EMA 9 < EMA 21 (trend reversal) **OR**
-    - RSI > 70 (overbought — take profit)
+    # Main price path
+    fig3d.add_trace(go.Scatter3d(
+        x=df['day_index'], y=df['close'], z=df['RSI'],
+        mode='lines+markers',
+        marker=dict(
+            size=4, color=df['RSI'],
+            colorscale='RdYlGn_r',
+            showscale=True,
+            colorbar=dict(title="RSI<br>Value", x=1.02)
+        ),
+        line=dict(color='white', width=3),
+        name='BTC Price Journey',
+        hovertemplate='<b>Day:</b> %{x}<br><b>Price:</b> $%{y:,.2f}<br><b>RSI:</b> %{z:.1f}<extra></extra>'
+    ))
 
-    **Risk Management:**
-    - Stop Loss: 2% below entry price
-    - Take Profit: 5% above entry price
+    # Buy signals
+    buy_3d = df[df['signal'] == 1]
+    fig3d.add_trace(go.Scatter3d(
+        x=buy_3d['day_index'], y=buy_3d['close'], z=buy_3d['RSI'],
+        mode='markers',
+        marker=dict(size=12, color='lime', symbol='circle',
+                    line=dict(color='white', width=2)),
+        name='🟢 BUY Signal',
+        hovertemplate='<b>BUY!</b><br>Price: $%{y:,.2f}<br>RSI: %{z:.1f}<extra></extra>'
+    ))
 
-    **Key Metrics Explained:**
-    | Metric | What It Means |
-    |--------|--------------|
-    | Win Rate | % of trades that were profitable |
-    | Profit Factor | Gross profit ÷ Gross loss (>1.0 = profitable) |
-    | Max Drawdown | Largest peak-to-trough drop in equity |
-    | Sharpe Ratio | Risk-adjusted return (>1.0 = good) |
+    # Sell signals
+    sell_3d = df[df['signal'] == -1]
+    fig3d.add_trace(go.Scatter3d(
+        x=sell_3d['day_index'], y=sell_3d['close'], z=sell_3d['RSI'],
+        mode='markers',
+        marker=dict(size=12, color='red', symbol='x',
+                    line=dict(color='white', width=2)),
+        name='🔴 SELL Signal',
+        hovertemplate='<b>SELL!</b><br>Price: $%{y:,.2f}<br>RSI: %{z:.1f}<extra></extra>'
+    ))
+
+    # RSI threshold planes
+    fig3d.add_trace(go.Surface(
+        x=[[0, len(df)], [0, len(df)]],
+        y=[[df['close'].min(), df['close'].min()], [df['close'].max(), df['close'].max()]],
+        z=[[30, 30], [30, 30]],
+        colorscale=[[0, 'rgba(0,255,0,0.2)'], [1, 'rgba(0,255,0,0.2)']],
+        showscale=False, name='Oversold Zone (RSI=30)', hoverinfo='skip'
+    ))
+    fig3d.add_trace(go.Surface(
+        x=[[0, len(df)], [0, len(df)]],
+        y=[[df['close'].min(), df['close'].min()], [df['close'].max(), df['close'].max()]],
+        z=[[70, 70], [70, 70]],
+        colorscale=[[0, 'rgba(255,0,0,0.2)'], [1, 'rgba(255,0,0,0.2)']],
+        showscale=False, name='Overbought Zone (RSI=70)', hoverinfo='skip'
+    ))
+
+    fig3d.update_layout(
+        scene=dict(
+            xaxis=dict(title='📅 Day Number', backgroundcolor='rgb(20,20,20)'),
+            yaxis=dict(title='💵 Price (USD)', backgroundcolor='rgb(20,20,20)'),
+            zaxis=dict(title='📊 RSI (0-100)', backgroundcolor='rgb(20,20,20)', range=[0, 100]),
+            bgcolor='rgb(10,10,10)'
+        ),
+        height=700, margin=dict(r=20, l=10, b=10, t=40),
+        legend=dict(x=0, y=1, bgcolor='rgba(0,0,0,0.5)')
+    )
+    st.plotly_chart(fig3d, width='stretch')
+
+# ---------------------------------------------------------------------------
+# VIZ 2: 3D MOUNTAIN TERRAIN
+# ---------------------------------------------------------------------------
+elif viz_option.startswith("2"):
+    st.markdown("""
+    **What you see:** Price data rendered as a 3D terrain/landscape.
+    Peaks = high prices, valleys = low prices. Color encodes price level (purple=low, yellow=high).
+    """)
+
+    x = np.array(df['day_index'])
+    y_base = np.linspace(0, 1, 20)
+    X, Y = np.meshgrid(x, y_base)
+    Z = np.tile(df['close'].values, (20, 1))
+    noise = np.random.normal(0, df['close'].std() * 0.02, Z.shape)
+    Z = Z + noise * Y
+
+    fig3d = go.Figure()
+    fig3d.add_trace(go.Surface(
+        x=X, y=Y, z=Z, colorscale='Viridis',
+        colorbar=dict(title='Price ($)', x=1.02),
+        hovertemplate='Day: %{x}<br>Price: $%{z:,.2f}<extra></extra>'
+    ))
+
+    buy_3d = df[df['signal'] == 1]
+    fig3d.add_trace(go.Scatter3d(
+        x=buy_3d['day_index'], y=[0.5] * len(buy_3d),
+        z=buy_3d['close'] + 1000,
+        mode='markers+text',
+        marker=dict(size=10, color='lime', symbol='diamond'),
+        text=['BUY'] * len(buy_3d), textposition='top center', name='🟢 BUY'
+    ))
+
+    sell_3d = df[df['signal'] == -1]
+    fig3d.add_trace(go.Scatter3d(
+        x=sell_3d['day_index'], y=[0.5] * len(sell_3d),
+        z=sell_3d['close'] + 1000,
+        mode='markers+text',
+        marker=dict(size=10, color='red', symbol='diamond'),
+        text=['SELL'] * len(sell_3d), textposition='top center', name='🔴 SELL'
+    ))
+
+    fig3d.update_layout(
+        scene=dict(
+            xaxis_title='📅 Day Number', yaxis_title='Width', zaxis_title='💵 Price (USD)',
+            bgcolor='rgb(10,10,10)'
+        ),
+        height=700, margin=dict(r=20, l=10, b=10, t=40)
+    )
+    st.plotly_chart(fig3d, width='stretch')
+
+# ---------------------------------------------------------------------------
+# VIZ 3: 3D CANDLESTICK TOWERS
+# ---------------------------------------------------------------------------
+elif viz_option.startswith("3"):
+    st.markdown("""
+    **What you see:** Traditional candlesticks rendered as 3D towers.
+    🟩 Green = price went UP (bullish). 🟥 Red = price went DOWN (bearish).
+    Yellow line = EMA 9 (Fast), Orange line = EMA 21 (Slow).
+    """)
+
+    fig3d = go.Figure()
+    sample_df = df.iloc[::3].reset_index(drop=True)
+
+    for i, row in sample_df.iterrows():
+        color = 'lime' if row['close'] >= row['open'] else 'red'
+        fig3d.add_trace(go.Mesh3d(
+            x=[i-0.3, i+0.3, i+0.3, i-0.3, i-0.3, i+0.3, i+0.3, i-0.3],
+            y=[-0.3, -0.3, 0.3, 0.3, -0.3, -0.3, 0.3, 0.3],
+            z=[row['open'], row['open'], row['open'], row['open'],
+               row['close'], row['close'], row['close'], row['close']],
+            i=[0, 0, 0, 0, 4, 4, 0, 1, 1, 2, 2, 3],
+            j=[1, 2, 3, 4, 5, 6, 1, 5, 2, 6, 3, 7],
+            k=[2, 3, 0, 5, 6, 7, 4, 4, 5, 5, 6, 6],
+            color=color, opacity=0.8, showlegend=False,
+            hovertemplate=f'Day {i}<br>Open: ${row["open"]:,.2f}<br>Close: ${row["close"]:,.2f}<extra></extra>'
+        ))
+
+    fig3d.add_trace(go.Scatter3d(
+        x=sample_df.index, y=[0] * len(sample_df), z=sample_df['EMA_9'],
+        mode='lines', line=dict(color='yellow', width=4), name='EMA 9 (Fast)'
+    ))
+    fig3d.add_trace(go.Scatter3d(
+        x=sample_df.index, y=[0] * len(sample_df), z=sample_df['EMA_21'],
+        mode='lines', line=dict(color='orange', width=4), name='EMA 21 (Slow)'
+    ))
+
+    fig3d.update_layout(
+        scene=dict(
+            xaxis_title='📅 Day Number', yaxis_title='',
+            zaxis_title='💵 Price (USD)', bgcolor='rgb(10,10,10)',
+            yaxis=dict(showticklabels=False)
+        ),
+        height=700, margin=dict(r=20, l=10, b=10, t=40)
+    )
+    st.plotly_chart(fig3d, width='stretch')
+
+# ---------------------------------------------------------------------------
+# VIZ 4: 3D VOLUME ACTIVITY BARS
+# ---------------------------------------------------------------------------
+elif viz_option.startswith("4"):
+    st.markdown("""
+    **What you see:** Trading volume as 3D bars. Tall bars = lots of activity,
+    short bars = quiet market. Green = bullish day, Red = bearish day.
+    Yellow line = scaled price overlay.
+    """)
+
+    sample_df = df.iloc[::5].reset_index(drop=True)
+    fig3d = go.Figure()
+
+    for i, row in sample_df.iterrows():
+        vol_height = row['volume'] / sample_df['volume'].max() * 50000
+        color = 'lime' if row['close'] > row['open'] else 'red'
+        fig3d.add_trace(go.Scatter3d(
+            x=[row['day_index'], row['day_index']], y=[0, 0], z=[0, vol_height],
+            mode='lines', line=dict(color=color, width=10),
+            showlegend=False,
+            hovertemplate=f'Day {row["day_index"]}<br>Volume: {row["volume"]:,.0f}<extra></extra>'
+        ))
+
+    fig3d.add_trace(go.Scatter3d(
+        x=sample_df['day_index'], y=[0.5] * len(sample_df),
+        z=sample_df['close'] / sample_df['close'].max() * 50000,
+        mode='lines+markers', line=dict(color='yellow', width=3),
+        marker=dict(size=4, color='yellow'), name='Price (scaled)'
+    ))
+
+    fig3d.update_layout(
+        scene=dict(
+            xaxis_title='📅 Day Number', yaxis_title='',
+            zaxis_title='📊 Trading Volume', bgcolor='rgb(10,10,10)',
+            yaxis=dict(showticklabels=False)
+        ),
+        height=700, margin=dict(r=20, l=10, b=10, t=40)
+    )
+    st.plotly_chart(fig3d, width='stretch')
+
+# ---------------------------------------------------------------------------
+# VIZ 5: 3D SIGNAL OVERVIEW (ALL-IN-ONE)
+# ---------------------------------------------------------------------------
+elif viz_option.startswith("5"):
+    st.markdown("""
+    **What you see:** Complete 3D signal map. X = time, Y = EMA momentum difference,
+    Z = RSI. Green = buy zones, Red = sell zones, Gray = neutral.
+    Transparent planes mark RSI 30 (oversold) and RSI 70 (overbought) thresholds.
+    """)
+
+    df['ema_diff'] = df['EMA_9'] - df['EMA_21']
+
+    colors = []
+    for _, row in df.iterrows():
+        if row['RSI'] < 30 and row['ema_diff'] > 0:
+            colors.append('lime')
+        elif row['RSI'] > 70 and row['ema_diff'] < 0:
+            colors.append('red')
+        elif row['RSI'] < 40:
+            colors.append('lightgreen')
+        elif row['RSI'] > 60:
+            colors.append('salmon')
+        else:
+            colors.append('gray')
+
+    fig3d = go.Figure()
+    fig3d.add_trace(go.Scatter3d(
+        x=df['day_index'], y=df['ema_diff'], z=df['RSI'],
+        mode='markers',
+        marker=dict(size=6, color=colors, opacity=0.7, line=dict(color='white', width=1)),
+        name='All Data Points',
+        hovertemplate='Day: %{x}<br>EMA Diff: %{y:.2f}<br>RSI: %{z:.1f}<extra></extra>'
+    ))
+
+    buy_3d = df[df['signal'] == 1]
+    fig3d.add_trace(go.Scatter3d(
+        x=buy_3d['day_index'], y=buy_3d['ema_diff'], z=buy_3d['RSI'],
+        mode='markers',
+        marker=dict(size=15, color='lime', symbol='diamond', line=dict(color='white', width=2)),
+        name='🟢 Executed BUY'
+    ))
+
+    sell_3d = df[df['signal'] == -1]
+    fig3d.add_trace(go.Scatter3d(
+        x=sell_3d['day_index'], y=sell_3d['ema_diff'], z=sell_3d['RSI'],
+        mode='markers',
+        marker=dict(size=15, color='red', symbol='x', line=dict(color='white', width=2)),
+        name='🔴 Executed SELL'
+    ))
+
+    # RSI threshold planes
+    fig3d.add_trace(go.Surface(
+        x=[[0, len(df)], [0, len(df)]],
+        y=[[df['ema_diff'].min(), df['ema_diff'].min()],
+           [df['ema_diff'].max(), df['ema_diff'].max()]],
+        z=[[30, 30], [30, 30]],
+        colorscale=[[0, 'rgba(0,255,0,0.15)'], [1, 'rgba(0,255,0,0.15)']],
+        showscale=False, name='RSI=30 (Oversold)', hoverinfo='skip'
+    ))
+    fig3d.add_trace(go.Surface(
+        x=[[0, len(df)], [0, len(df)]],
+        y=[[df['ema_diff'].min(), df['ema_diff'].min()],
+           [df['ema_diff'].max(), df['ema_diff'].max()]],
+        z=[[70, 70], [70, 70]],
+        colorscale=[[0, 'rgba(255,0,0,0.15)'], [1, 'rgba(255,0,0,0.15)']],
+        showscale=False, name='RSI=70 (Overbought)', hoverinfo='skip'
+    ))
+
+    fig3d.update_layout(
+        scene=dict(
+            xaxis_title='📅 Day Number',
+            yaxis_title='📈 EMA Difference (Momentum)',
+            zaxis_title='📊 RSI (0-100)',
+            bgcolor='rgb(10,10,10)', zaxis=dict(range=[0, 100])
+        ),
+        height=700, margin=dict(r=20, l=10, b=10, t=40)
+    )
+    st.plotly_chart(fig3d, width='stretch')
+
+# =============================================================================
+# 🏛️ RESEARCH ARCHITECTURE
+# =============================================================================
+st.markdown("---")
+st.subheader("🏛️ Strategy Architecture & Research Design")
+
+with st.expander("📐 System Architecture", expanded=False):
+    st.markdown("""
+    ```
+    ┌──────────────────────────────────────────────────────────────────┐
+    │                    AETHER QUANT ARCHITECTURE                     │
+    ├──────────────────────────────────────────────────────────────────┤
+    │                                                                  │
+    │  ┌─────────────┐     ┌──────────────┐     ┌─────────────────┐  │
+    │  │ DATA LAYER  │────▶│ STRATEGY     │────▶│ BACKTEST ENGINE │  │
+    │  │             │     │ ENGINE       │     │                 │  │
+    │  │ • Binance   │     │ • EMA 9/21   │     │ • Trade Sim     │  │
+    │  │   API       │     │   Crossover  │     │ • Stop Loss 2%  │  │
+    │  │ • Multi-    │     │ • RSI < 55   │     │ • Take Profit   │  │
+    │  │   endpoint  │     │   Pullback   │     │   5%            │  │
+    │  │ • Synthetic │     │ • RSI > 70   │     │ • Equity Curve  │  │
+    │  │   Fallback  │     │   Exit       │     │ • Metrics Calc  │  │
+    │  └─────────────┘     └──────────────┘     └────────┬────────┘  │
+    │                                                     │           │
+    │                                           ┌─────────▼────────┐  │
+    │                                           │ DASHBOARD LAYER  │  │
+    │                                           │                  │  │
+    │                                           │ • Key Metrics    │  │
+    │                                           │ • 2D Charts      │  │
+    │                                           │ • 3D Research    │  │
+    │                                           │   Visualizations │  │
+    │                                           │ • Streamlit UI   │  │
+    │                                           └──────────────────┘  │
+    └──────────────────────────────────────────────────────────────────┘
+    ```
+    """)
+
+with st.expander("🔬 Strategy Signal Pipeline", expanded=False):
+    st.markdown("""
+    ```
+    MARKET DATA (1D candles, 365 days)
+        │
+        ▼
+    ┌─────────────────────────────────┐
+    │  INDICATOR CALCULATION          │
+    │  ├─ EMA 9  (Fast Moving Avg)    │
+    │  ├─ EMA 21 (Slow Moving Avg)    │
+    │  └─ RSI 14 (Momentum Osc.)     │
+    └───────────────┬─────────────────┘
+                    │
+        ┌───────────▼───────────┐
+        │  SIGNAL GENERATION    │
+        │                       │
+        │  BUY when:            │
+        │  • EMA9 > EMA21  AND  │
+        │  • RSI < 55           │
+        │                       │
+        │  SELL when:           │
+        │  • EMA9 < EMA21  OR   │
+        │  • RSI > 70           │
+        └───────────┬───────────┘
+                    │
+        ┌───────────▼───────────┐
+        │  RISK MANAGEMENT      │
+        │                       │
+        │  • Stop Loss:  -2%    │
+        │  • Take Profit: +5%   │
+        │  • Position Sizing:   │
+        │    100% of capital    │
+        └───────────┬───────────┘
+                    │
+        ┌───────────▼───────────┐
+        │  METRICS OUTPUT       │
+        │                       │
+        │  • Win Rate           │
+        │  • Profit Factor      │
+        │  • Max Drawdown       │
+        │  • Sharpe Ratio       │
+        │  • Avg Win/Loss Ratio │
+        └───────────────────────┘
+    ```
+    """)
+
+with st.expander("📂 Data Pipeline & Resilience", expanded=False):
+    st.markdown("""
+    ```
+    ┌───────────────────────────────────────────────────────────┐
+    │                   DATA FETCH PIPELINE                     │
+    ├───────────────────────────────────────────────────────────┤
+    │                                                           │
+    │  Endpoint Rotation (Geo-Blocking Bypass):                 │
+    │  ┌────────────────────────────────────────────┐           │
+    │  │ 1. api.binance.com     (Primary)           │           │
+    │  │ 2. api1.binance.com    (Backup Cluster 1)  │           │
+    │  │ 3. api2.binance.com    (Backup Cluster 2)  │           │
+    │  │ 4. api3.binance.com    (Backup Cluster 3)  │           │
+    │  │ 5. api.binance.us      (US Endpoint)       │           │
+    │  └──────────────────┬─────────────────────────┘           │
+    │                     │                                     │
+    │          ┌──────────▼──────────┐                          │
+    │          │ All endpoints fail? │                          │
+    │          └──────────┬──────────┘                          │
+    │                     │ YES                                 │
+    │          ┌──────────▼──────────────┐                      │
+    │          │ SYNTHETIC MARKET        │                      │
+    │          │ GENERATOR               │                      │
+    │          │ • Seed: 42              │                      │
+    │          │ • Start: $62,500        │                      │
+    │          │ • Drift: +0.03%/day     │                      │
+    │          │ • Volatility: 1.8%/day  │                      │
+    │          └─────────────────────────┘                      │
+    │                                                           │
+    │  Browser-Mimicking Headers:                               │
+    │  User-Agent: Chrome 120 (Windows NT 10.0)                 │
+    │                                                           │
+    │  Cache Strategy:                                          │
+    │  • Streamlit @cache_data with TTL=3600s                   │
+    │  • Versioned cache key for forced invalidation            │
+    │  • Auto-retry on zero-trade detection                     │
+    └───────────────────────────────────────────────────────────┘
+    ```
+    """)
+
+# =============================================================================
+# 📚 LEARNING SECTION
+# =============================================================================
+st.markdown("---")
+st.subheader("📚 Strategy Learning Guide")
+
+with st.expander("🔰 What is EMA Crossover?"):
+    st.markdown("""
+    **EMA = Exponential Moving Average** — a "smoothed average" of recent prices.
+
+    ```
+    EMA 9  (Fast) = Average of last 9 days  → Reacts quickly to price changes
+    EMA 21 (Slow) = Average of last 21 days → Reacts slowly, filters noise
+
+    📈 When Fast EMA crosses ABOVE Slow EMA → Uptrend starting → BUY
+    📉 When Fast EMA crosses BELOW Slow EMA → Downtrend starting → SELL
+    ```
+
+    **Visual Example:**
+    ```
+    Price: ──────╱╲──────╱╲────
+    EMA 9:  ─────╱──╲───╱───╲──  (follows price closely)
+    EMA 21: ──────╱────╲───╱──── (smoother, slower)
+                 ↑        ↑
+            BUY signal  SELL signal
+    ```
+    """)
+
+with st.expander("🔰 What is RSI?"):
+    st.markdown("""
+    **RSI = Relative Strength Index** (ranges from 0 to 100)
+
+    It measures if an asset is "too expensive" or "too cheap" right now.
+
+    ```
+    RSI > 70 = OVERBOUGHT 🔴 → Too many buyers → Price may drop → SELL
+    RSI < 30 = OVERSOLD   🟢 → Too many sellers → Price may rise → BUY
+    RSI 30-70 = NEUTRAL   ⚪ → No extreme signal
+    ```
+
+    **Think of it like a rubber band:**
+    - Stretched too far up (RSI > 70) = will snap back down
+    - Stretched too far down (RSI < 30) = will snap back up
+    """)
+
+with st.expander("🔰 How Our Strategy Combines Both"):
+    st.markdown("""
+    **Aether Strategy: EMA Crossover + RSI Pullback Confirmation**
+
+    We only trade when BOTH indicators agree:
+
+    ```
+    ✅ BUY when:
+       • EMA 9 > EMA 21 (uptrend confirmed)
+       • AND RSI < 55 (not overbought — catching the pullback)
+
+    ✅ SELL when:
+       • EMA 9 < EMA 21 (downtrend starts)
+       • OR RSI > 70 (overbought — time to take profits)
+    ```
+
+    **Why combine them?**
+    - EMA alone gives false signals during sideways markets
+    - RSI alone can signal too early before trends develop
+    - Together = **stronger, more reliable** trade signals!
+    """)
+
+with st.expander("📊 Key Metrics Explained"):
+    st.markdown("""
+    | Metric | What It Means | Good Value |
+    |--------|--------------|------------|
+    | **Win Rate** | % of trades that were profitable | > 40% |
+    | **Profit Factor** | Gross profit ÷ Gross loss | > 1.3 |
+    | **Max Drawdown** | Largest peak-to-trough equity drop | > -20% |
+    | **Sharpe Ratio** | Risk-adjusted return per unit of volatility | > 1.0 |
+    | **Avg Win/Loss** | Average winning trade ÷ Average losing trade | > 1.5:1 |
     """)
 
 # =============================================================================
 # FOOTER
 # =============================================================================
 st.markdown("---")
-st.caption("Built with Streamlit + Plotly • For educational & research purposes only • Not financial advice")
+st.caption("Built with Streamlit + Plotly • Aether 3D Quant Research • For educational & research purposes only • Not financial advice")
